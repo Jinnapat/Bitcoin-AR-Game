@@ -1,0 +1,44 @@
+<script src="aframe.min.js"></script>
+<script src="aframe-ar.min.js"></script>
+<body>
+<a-scene embedded arjs="debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3" vr-mode-ui="enabled: false">
+	<a-assets>
+		<a-asset-item id="miner" src="miner.gltf">
+	</a-assets>
+	<a-anchor preset="area">
+		<a-gltf-model position="2.5 0 2" src="#miner"></a-gltf-model>
+		<a-sphere scale="0.2 0.2 0.2" position="5 5 0" material="color: orange; transparent: true; opacity: 0.5" cursor-listener-shock id="shock"></a-sphere>
+	</a-anchor>
+	<a-camera-static>
+		<a-cursor fuse="true"></a-cursor>
+	</a-camera-static>
+</a-scene>
+<script>
+var shock = document.getElementById('shock');
+
+function ranPos() {
+	return Math.round((Math.random() * 5));
+}
+
+function hideShock() {
+	shock.setAttribute('position', {x: ranPos(), y: ranPos(), z: ranPos()});
+	shock.setAttribute('visible', true);
+}
+
+hideShock();
+
+setInterval(function() {
+	if (shock.getAttribute('visible') == false) {
+		hideShock();
+	}
+}, 10000);
+AFRAME.registerComponent('cursor-listener-shock', {
+  init: function () {
+    this.el.addEventListener('click', function (evt) {
+		shock.setAttribute('visible', false);
+		parent.C2("fixed");
+    });
+  }
+});
+</script>
+</body>

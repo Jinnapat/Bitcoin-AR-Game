@@ -1,0 +1,191 @@
+<script src="three.min.js"></script>
+<script src="stats.min.js"></script>
+<script src="ar.min.js"></script>
+<script>ARjs.Context.baseURL = '../'</script>
+
+<body>
+<div style='position: fixed; bottom: 5px; left: 20px; z-index:2; font-size: 1pt' id='markersStatus'>
+	<div>
+		Tracking <span class='labelTrackingBackend'>Unknown</span> - 
+		Learning <span class='globalStatus'>Stopped</span>
+	</div>
+	<ul></ul>
+</div>
+<script>
+;(function(){
+	var renderer	= new THREE.WebGLRenderer({
+		antialias	: true,
+		alpha: true
+	});
+	renderer.setClearColor(new THREE.Color('lightgrey'), 0)
+	// renderer.setPixelRatio( 2 );
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	renderer.domElement.style.position = 'absolute'
+	renderer.domElement.style.top = '0px'
+	renderer.domElement.style.left = '0px'
+	document.body.appendChild( renderer.domElement );
+
+	var onRenderFcts= [];
+	var scene	= new THREE.Scene();
+	var camera = new THREE.Camera();
+	scene.add(camera);
+
+	var artoolkitProfile = new THREEx.ArToolkitProfile()
+	artoolkitProfile.sourceWebcam().trackingMethod("area-artoolkit")
+
+	var arToolkitSource = new THREEx.ArToolkitSource(artoolkitProfile.sourceParameters)
+
+	arToolkitSource.init(function onReady(){
+		onResize()
+	})
+	
+	window.addEventListener('resize', function(){
+		onResize()
+	})
+	function onResize(){
+		arToolkitSource.onResizeElement()
+		arToolkitSource.copyElementSizeTo(renderer.domElement)	
+		if( arToolkitContext.arController !== null ){
+			arToolkitSource.copyElementSizeTo(arToolkitContext.arController.canvas)	
+		}	
+	}
+
+	artoolkitProfile.contextParameters.detectionMode = "mono_and_matrix"
+	artoolkitProfile.contextParameters.matrixCodeType = "3x3"
+
+	var arToolkitContext = new THREEx.ArToolkitContext(artoolkitProfile.contextParameters)
+	arToolkitContext.init(function onCompleted(){
+		camera.projectionMatrix.copy( arToolkitContext.getProjectionMatrix() );			
+	})
+
+	onRenderFcts.push(function(){
+		if( arToolkitSource.ready === false )	return
+		
+		arToolkitContext.update( arToolkitSource.domElement )
+	})
+	
+	var markersControlsParameters = [{"type":"barcode","barcodeValue":0},{"type":"barcode","barcodeValue":1},{"type":"barcode","barcodeValue":2},{"type":"barcode","barcodeValue":3},{"type":"barcode","barcodeValue":4},{"type":"barcode","barcodeValue":5},{"type":"barcode","barcodeValue":6},{"type":"barcode","barcodeValue":7},{"type":"barcode","barcodeValue":8},{"type":"barcode","barcodeValue":9},{"type":"barcode","barcodeValue":10},{"type":"barcode","barcodeValue":11}]
+	
+	var subMarkersControls = []
+	markersControlsParameters.forEach(function(markerControlsParameters){
+		var markerRoot = new THREE.Group()
+		scene.add(markerRoot)
+
+		var markerControls = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, markerControlsParameters)
+		
+		var smoothedControls = null
+		if( false ){
+			var smoothedRoot = new THREE.Group()
+			scene.add(smoothedRoot)
+			var smoothedControls = new THREEx.ArSmoothedControls(smoothedRoot)
+			onRenderFcts.push(function(){
+				smoothedControls.update(markerRoot)
+			})				
+		}
+
+		var markerHelper = new THREEx.ArMarkerHelper(markerControls)
+		if( smoothedControls !== null ){
+			smoothedControls.object3d.add( markerHelper.object3d )
+		}else{
+			markerControls.object3d.add( markerHelper.object3d )			
+		}
+
+		if( smoothedControls !== null ){
+			subMarkersControls.push(smoothedControls)
+		}else {
+			subMarkersControls.push(markerControls)
+		}
+	})
+		
+	var multiMarkerLearning = new THREEx.ArMultiMakersLearning(arToolkitContext, subMarkersControls)
+	window.multiMarkerLearning = multiMarkerLearning
+	multiMarkerLearning.resetStats()
+	multiMarkerLearning.enabled = true
+	
+	function createUIMarkersStatus(){
+		document.querySelector('#markersStatus .labelTrackingBackend').innerHTML = "artoolkit"
+
+		multiMarkerLearning.subMarkersControls.forEach(function(subMarkerControls){
+			var container = document.createElement('li')
+			container.id = 'markerStatus_'+subMarkerControls.id
+			
+			var domElement = document.createElement('span')
+			domElement.classList.add('name')
+			domElement.innerHTML = subMarkerControls.name() + ' : '
+			container.appendChild(domElement)
+
+			var domElement = document.createElement('span')
+			domElement.classList.add('status')
+			domElement.innerHTML = '0%'
+			container.appendChild(domElement)
+
+			document.querySelector('#markersStatus ul').appendChild(container)			
+		})
+	}
+
+	function updateUIMarkersStatus(){
+		multiMarkerLearning.subMarkersControls.forEach(function(subMarkerControls){
+	 		var container = document.querySelector('#markerStatus_'+subMarkerControls.id+ ' .status')
+			var confidenceFactor = 0
+			if( subMarkerControls.object3d.userData.result !== undefined ){
+				var confidenceFactor = subMarkerControls.object3d.userData.result.confidenceFactor
+			}else{
+				var confidenceFactor = 0
+			}
+
+			var progress = Math.min(confidenceFactor, 1)
+
+			if( progress === 1 ){
+				container.style.color = 'green'
+	 			container.innerHTML = "\u2713"
+			}else{
+				container.style.color = 'red'
+	 			container.innerHTML = (progress*100).toFixed(1) + '%'
+			}
+		})
+
+		var nMarkersLearned = 0
+		multiMarkerLearning.subMarkersControls.forEach(function(subMarkerControls){
+			if( subMarkerControls.object3d.userData.result === undefined )	return
+			if( subMarkerControls.object3d.userData.result.confidenceFactor < 1 ) return
+			nMarkersLearned++
+		})
+		var domElement = document.querySelector('#markersStatus .globalStatus')
+		if( nMarkersLearned === multiMarkerLearning.subMarkersControls.length ){
+			domElement.style.color = 'green'
+			domElement.innerHTML = 'DONE'
+			multiMarkerLearning.enabled = false
+			localStorage.setItem('ARjsMultiMarkerFile', multiMarkerLearning.toJSON())
+			clearInterval(stillOn)
+		}else{
+			domElement.style.color = 'red'
+			domElement.innerHTML = 'in progress'
+		}
+	}
+	
+	createUIMarkersStatus()
+
+	var stillOn = setInterval(function(){
+		multiMarkerLearning.computeResult()
+		updateUIMarkersStatus()
+	}, 1000/10)
+
+	var stats = new Stats();
+	// document.body.appendChild( stats.dom );
+	onRenderFcts.push(function(){
+		renderer.render( scene, camera );
+		stats.update();
+	})
+
+	var lastTimeMsec= null
+	requestAnimationFrame(function animate(nowMsec){
+		requestAnimationFrame( animate );
+		lastTimeMsec	= lastTimeMsec || nowMsec-1000/60
+		var deltaMsec	= Math.min(200, nowMsec - lastTimeMsec)
+		lastTimeMsec	= nowMsec
+		onRenderFcts.forEach(function(onRenderFct){
+			onRenderFct(deltaMsec/1000, nowMsec/1000)
+		})
+	})
+})()
+</script></body>

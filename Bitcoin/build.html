@@ -1,0 +1,53 @@
+<script src="aframe.min.js"></script>
+<script src="aframe-ar.min.js"></script>
+<script>
+AFRAME.registerComponent('cursor-listener', {
+  init: function () {
+    this.el.addEventListener('click', function (evt) {
+		[].forEach.call(model, function(i) {
+			if (i.name == order[o]) {
+				i.visible = true;
+			}
+			if (i.name == order[o+1] && o < order.length) {
+				ball.object3D.position.set(i.position.x + 2.5, i.position.y + 2, i.position.z + 2);
+			}
+		});
+		o++;
+		if (o > order.length) {
+			ball.object3D.visible = false;
+			parent.C2("builded");
+		}
+    });
+  }
+});
+</script>
+<body>
+<a-scene embedded arjs="debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3" vr-mode-ui="enabled: false">
+	<a-assets>
+		<a-asset-item id="miner" src="miner.gltf">
+	</a-assets>
+	<a-anchor preset="area">
+		<a-gltf-model position="2.5 0 2" src="#miner" material="color: red"></a-gltf-model>
+		<a-sphere scale="0.2 0.2 0.2" position="0 0 0" material="color: green; transparent: true; opacity: 0.5" cursor-listener></a-sphere>
+	</a-anchor>
+	<a-camera-static>
+		<a-cursor fuse="true"></a-cursor>
+	</a-camera-static>
+</a-scene>
+<script>
+var o = 0;
+var model;
+var ball = document.querySelector("a-sphere");
+var order = ["Case", "PowerSupply", "mainboard", "CPU", "RAM1", "RAM2", "RAM3", "GPU1", "Riser1", "_-PIN3","GPU2", "Riser2", "_-PIN2","GPU3", "Riser3", "_-PIN1","_0PIN2", "_0PIN1", "_PIN", "LAN", "ThumbDrive"];
+	
+document.querySelector("a-gltf-model").addEventListener("model-loaded", function() {
+	model = document.querySelector("a-gltf-model").object3D.children[0].children[0].children;
+	[].forEach.call(model, function(i) {
+		i.visible = false;
+		if (i.name == order[0]) {
+			ball.object3D.position.set(i.position.x + 2.5, i.position.y + 2, i.position.z + 2);
+		}
+	})
+})
+</script>
+</body>

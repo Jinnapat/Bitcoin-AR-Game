@@ -1,0 +1,15 @@
+h1 {
+	color: white;
+	word-break: break-word;
+	font-size: 16pt;
+}
+
+p {
+	color: white;
+	word-break: break-word;
+	font-size: 12pt;
+}
+
+a {
+	color: yellow;
+}
